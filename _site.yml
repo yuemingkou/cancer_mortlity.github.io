@@ -1,0 +1,14 @@
+name: "Predicting Cancer Mortality From Census Data"
+output_dir: "."
+navbar:
+  title: "Home"
+  right:
+    - text: "Google"
+      href: http://google.com/
+    - icon: fa-envelope fa-lg
+      href: mailto:<kouym@outlook.com>
+    - icon: fa-github fa-lg
+      href: https://github.com/yuemingkou/BM_final_report.github.io.git
+output:
+  html_document:
+    theme: flatly
