@@ -1,0 +1,244 @@
+---
+title: "Predicting Cancer Mortality From Census Data"
+output: html_document
+---
+
+# Set Up
+
+```{r setup, message = FALSE, warning = FALSE }
+library(glmnet)         # LASSO library
+library(modelr)         # For diagnostics
+library(MASS)           # For studentized residuals
+library(tidyverse)      # plotting & analysis
+library(caret)          # cross-validation
+
+knitr::opts_chunk$set(
+  fig.align = "center",
+  out.width = "90%"
+)
+
+cancer = read_csv(file = './Cancer_Registry.csv')
+```
+
+Our dataset contains `r ncol(cancer)` columns and `r nrow(cancer)` rows and represents a combination of two datasets. Each row represents a county and its related demographic, economic and education figures. Before we perform any modeling, we will clean the dataset and account for any missing values, data typing and formatting issues.
+
+# Data Cleaning
+
+```{r data-cleaning }
+tidy.cancer = cancer %>% 
+  janitor::clean_names() %>% 
+  separate(., geography, into = c("county", "state"), sep = ", ") %>% 
+  separate(., binned_inc, into = c("binned_inc_low", "binned_inc_high"), sep = ", ") %>% 
+  mutate(
+    inc_dec1 = as.numeric(substr(binned_inc_low, 2, length(binned_inc_low))),
+    inc_dec2 = as.numeric(str_replace(binned_inc_high, "]", "" )),
+    id = 1:nrow(.)
+  ) 
+
+num_NAs = map_df(tidy.cancer, function(col) return(sum(is.na(col))))
+
+cols_to_remove = which(num_NAs > nrow(cancer) / 10) * -1
+tidy.cancer = tidy.cancer[cols_to_remove, ]
+```
+
+# Data Characterization
+
+Create plot for how cancer mortality differs between state.
+
+```{r income-by-state }
+tidy.cancer %>% 
+  group_by(state) %>% 
+  summarize(count = n(),
+            mean.mortality = mean(target_death_rate),
+            std.error = qt(0.975, df = count - 1) * sd(target_death_rate)/sqrt(count) ) %>% 
+  ggplot(data = ., aes(x = reorder(state, -mean.mortality), 
+                       y = mean.mortality, 
+                       color = reorder(state, -mean.mortality))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean.mortality - std.error, ymax = mean.mortality + std.error)) +
+  labs(
+    title = "Average cancer mortality per capita by state",
+    x = "State",
+    y = "Average cancer mortality (per capita)"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+# Making the Model
+
+Narrow down the variables to make code cleaner.
+
+```{r variable-selection }
+# Narrow down the dataset to just established factors
+small.tidy.cancer = tidy.cancer %>% 
+  dplyr::select(
+    target_death_rate,
+    incidence_rate, poverty_percent, pct_no_hs18_24, pct_hs18_24, 
+    pct_unemployed16_over, pct_public_coverage_alone, pct_black, id
+  )
+```
+
+# Cross-validated LASSO Regression
+
+Before we fit our final linear regression, we will use LASSO to perform another layer of variable selection. First, we'll create a model based on our set of literature-reviewed covariates, and then perform cross-validation based on mean squared error to find the optimal $\lambda$ value for the penalization. We will create our predictive model based on the remaining factors left in the crossvalidated LASSO regression.
+
+```{r lasso-cv }
+set.seed(8150) # Make cross-validation replicable
+
+# Divide data into training set and test dataset (80/20)
+train.cancer = sample_frac(small.tidy.cancer, size = 0.8, replace = FALSE)
+test.cancer = anti_join(small.tidy.cancer, train.cancer, by = "id")
+
+# Divide datasets into outcome and covariates
+train.data = train.cancer %>% dplyr::select(-target_death_rate, -id)
+train.outcome = train.cancer %>% dplyr::select(target_death_rate)
+test.data = test.cancer %>% dplyr::select(-target_death_rate, -id)
+test.outcome = test.cancer %>% dplyr::select(target_death_rate)
+
+# LASSO Cross-validation
+lambda.range = 10^(seq(5, -3, length = 1000)) # set of lambdas to crossvalidate over
+lasso.CV =  cv.glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lambda.range)
+
+# LASSO Regressions comparing the lambda.min vs lambda.1se
+lasso.min = glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lasso.CV$lambda.min)
+lasso.1se = glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lasso.CV$lambda.1se)
+```
+
+We have created two models based off of the LASSO cross-validation, one based off the minimum lambda and another based off a model comparable to the best model in the cross-validation. We'll compare their coefficients and test MSE below to choose one. 
+
+```{r lasso-cv-comparison }
+# List the coefficients for each model
+coef(lasso.min)
+coef(lasso.1se)
+
+# Calculate the test MSE for each model 
+lasso.min.test.preds = predict(lasso.min, s = lasso.CV$lambda.min, newx = as.matrix(test.data))
+lasso.min.test.MSE = mean((lasso.min.test.preds - test.outcome$target_death_rate)^2)
+lasso.1se.test.preds = predict(lasso.1se, s = lasso.CV$lambda.1se, newx = as.matrix(test.data))
+lasso.1se.test.MSE = mean((lasso.1se.test.preds - test.outcome$target_death_rate)^2)
+```
+
+
+The test MSE for the smallest lambda is `r round(lasso.min.test.MSE, 1)`, while the test MSE for the lambda comparable to the best model is `r round(lasso.1se.test.MSE, 1)`. Given that the test MSEs are not significantly different, we will choose the more parsimonious model as the basis for our predictive model.
+
+# Create the model
+
+```{r final-model }
+# Create a formula for the linear regression
+final.formula = as.formula(
+  paste("target_death_rate ~ ",
+        "incidence_rate + poverty_percent + pct_hs18_24 + pct_unemployed16_over + pct_public_coverage_alone"
+        )
+)
+
+final.model = lm(final.formula, data = train.cancer)
+summary(final.model)
+```
+
+#### Check for model assumptions
+
+```{r fit-vs-pred }
+train.cancer %>% 
+  add_residuals(final.model) %>% 
+  add_predictions(final.model) %>% 
+  ggplot(data = ., aes(x = pred, y = resid, color = ifelse(abs(resid) < 75, "red", "blue"))) +
+  geom_point() +
+  geom_hline(yintercept = 75, alpha = 0.3) +
+  geom_hline(yintercept = -75, alpha = 0.3) +
+  labs(
+    title = "Fitted vs predicted values",
+    x = "Predicted values",
+    y = "Residuals"
+  ) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+```{r qqplot }
+train.cancer %>% 
+  add_residuals(final.model) %>% 
+  ggplot(data = ., aes(sample = resid)) +
+  stat_qq(color = "blue", alpha = 0.5) +
+  stat_qq_line() +
+  labs(
+    title = "QQ-plot for model residuals",
+    x = "Theoretical quantiles",
+    y = "Residuals"
+  )
+
+```
+
+# Isolating rows that are outliers in the dataset and influential points
+
+```{r outliers-and-influentials }
+student.resids = studres(final.model)
+hats = hatvalues(final.model)
+cooks = cooks.distance(final.model)
+
+# Indexes of outliers and influential points
+y.outliers = unname(which(student.resids > 2.5))
+x.outliers = unname(which(hats > 2 * (length(final.model$coefficients) / nrow(train.data))))
+influentials = unname(which(cooks > 1))
+
+outliers = intersect(y.outliers, x.outliers)
+outlier.ids = train.cancer[outliers, ]$id
+outlier.data = tidy.cancer %>% filter(id %in% outlier.ids)
+```
+
+# Refitting a model based on removing outliers
+
+```{r checking-removing-outliers }
+new.train.cancer = train.cancer %>% filter(!(id %in% outliers))
+no.outliers.final.model = lm(final.formula, data = new.train.cancer)
+summary(no.outliers.final.model)
+```
+
+```{r}
+train.MSE = sum(final.model$residuals^2) / 2430
+```
+
+```{r}
+cor(small.tidy.cancer)
+```
+
+# Checking VIF
+
+```{r}
+car::vif(final.model, data = train.cancer)
+```
+
+# Cross-validation of test MSE
+
+```{r 10-fold-cv }
+# Use 10-fold cross-validation (10 repeats) and create the training sets
+train.settings = trainControl(method = "repeatedcv", number = 10, repeats = 10)
+
+# Fit the final model that we discussed above
+cv.model = train(final.formula, 
+                 data = tidy.cancer,
+                 trControl = train.settings,
+                 method = 'lm',
+                 na.action = na.pass)
+
+cv.MSE = mean(cv.model$resample$RMSE^2)
+```
+
+# Log transform the outcome
+
+```{r final-model2 }
+# Create a formula for the linear regression
+log.formula = as.formula(
+  paste("log(target_death_rate) ~ ",
+        "incidence_rate + poverty_percent + pct_hs18_24 + pct_unemployed16_over + pct_public_coverage_alone"
+        )
+)
+
+log.model = lm(log.formula, data = train.cancer)
+summary(log.model)
+```

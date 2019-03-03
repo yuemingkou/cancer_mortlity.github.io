@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+
+
+<title>Predicting Cancer Mortality From Census Data</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/flatly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+<link href="site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet" />
+<link href="site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet" />
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 60px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h2 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h3 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h4 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h5 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h6 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Home</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li>
+  <a href="http://google.com/">Google</a>
+</li>
+<li>
+  <a href="mailto:&lt;kouym@outlook.com&gt;">
+    <span class="fa fa-envelope fa-lg"></span>
+     
+  </a>
+</li>
+<li>
+  <a href="https://github.com/yuemingkou/BM_final_report.github.io.git">
+    <span class="fa fa-github fa-lg"></span>
+     
+  </a>
+</li>
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Predicting Cancer Mortality From Census Data</h1>
+
+</div>
+
+
+<div id="set-up" class="section level1">
+<h1>Set Up</h1>
+<pre class="r"><code>library(glmnet)         # LASSO library
+library(modelr)         # For diagnostics
+library(MASS)           # For studentized residuals
+library(tidyverse)      # plotting &amp; analysis
+library(caret)          # cross-validation
+
+knitr::opts_chunk$set(
+  fig.align = &quot;center&quot;,
+  out.width = &quot;90%&quot;
+)
+
+cancer = read_csv(file = &#39;./Cancer_Registry.csv&#39;)</code></pre>
+<p>Our dataset contains 34 columns and 3047 rows and represents a combination of two datasets. Each row represents a county and its related demographic, economic and education figures. Before we perform any modeling, we will clean the dataset and account for any missing values, data typing and formatting issues.</p>
+</div>
+<div id="data-cleaning" class="section level1">
+<h1>Data Cleaning</h1>
+<pre class="r"><code>tidy.cancer = cancer %&gt;% 
+  janitor::clean_names() %&gt;% 
+  separate(., geography, into = c(&quot;county&quot;, &quot;state&quot;), sep = &quot;, &quot;) %&gt;% 
+  separate(., binned_inc, into = c(&quot;binned_inc_low&quot;, &quot;binned_inc_high&quot;), sep = &quot;, &quot;) %&gt;% 
+  mutate(
+    inc_dec1 = as.numeric(substr(binned_inc_low, 2, length(binned_inc_low))),
+    inc_dec2 = as.numeric(str_replace(binned_inc_high, &quot;]&quot;, &quot;&quot; )),
+    id = 1:nrow(.)
+  ) 
+
+num_NAs = map_df(tidy.cancer, function(col) return(sum(is.na(col))))
+
+cols_to_remove = which(num_NAs &gt; nrow(cancer) / 10) * -1
+tidy.cancer = tidy.cancer[cols_to_remove, ]</code></pre>
+</div>
+<div id="data-characterization" class="section level1">
+<h1>Data Characterization</h1>
+<p>Create plot for how cancer mortality differs between state.</p>
+<pre class="r"><code>tidy.cancer %&gt;% 
+  group_by(state) %&gt;% 
+  summarize(count = n(),
+            mean.mortality = mean(target_death_rate),
+            std.error = qt(0.975, df = count - 1) * sd(target_death_rate)/sqrt(count) ) %&gt;% 
+  ggplot(data = ., aes(x = reorder(state, -mean.mortality), 
+                       y = mean.mortality, 
+                       color = reorder(state, -mean.mortality))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean.mortality - std.error, ymax = mean.mortality + std.error)) +
+  labs(
+    title = &quot;Average cancer mortality per capita by state&quot;,
+    x = &quot;State&quot;,
+    y = &quot;Average cancer mortality (per capita)&quot;
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 60, hjust = 1),
+    legend.position = &quot;none&quot;
+  )</code></pre>
+<pre><code>## Warning in qt(0.975, df = count - 1): 产生了NaNs</code></pre>
+<pre><code>## Warning: Removed 1 rows containing missing values (geom_errorbar).</code></pre>
+<p><img src="code_files/figure-html/income-by-state-1.png" width="90%" style="display: block; margin: auto;" /></p>
+</div>
+<div id="making-the-model" class="section level1">
+<h1>Making the Model</h1>
+<p>Narrow down the variables to make code cleaner.</p>
+<pre class="r"><code># Narrow down the dataset to just established factors
+small.tidy.cancer = tidy.cancer %&gt;% 
+  dplyr::select(
+    target_death_rate,
+    incidence_rate, poverty_percent, pct_no_hs18_24, pct_hs18_24, 
+    pct_unemployed16_over, pct_public_coverage_alone, pct_black, id
+  )</code></pre>
+</div>
+<div id="cross-validated-lasso-regression" class="section level1">
+<h1>Cross-validated LASSO Regression</h1>
+<p>Before we fit our final linear regression, we will use LASSO to perform another layer of variable selection. First, we’ll create a model based on our set of literature-reviewed covariates, and then perform cross-validation based on mean squared error to find the optimal <span class="math inline">\(\lambda\)</span> value for the penalization. We will create our predictive model based on the remaining factors left in the crossvalidated LASSO regression.</p>
+<pre class="r"><code>set.seed(8150) # Make cross-validation replicable
+
+# Divide data into training set and test dataset (80/20)
+train.cancer = sample_frac(small.tidy.cancer, size = 0.8, replace = FALSE)
+test.cancer = anti_join(small.tidy.cancer, train.cancer, by = &quot;id&quot;)
+
+# Divide datasets into outcome and covariates
+train.data = train.cancer %&gt;% dplyr::select(-target_death_rate, -id)
+train.outcome = train.cancer %&gt;% dplyr::select(target_death_rate)
+test.data = test.cancer %&gt;% dplyr::select(-target_death_rate, -id)
+test.outcome = test.cancer %&gt;% dplyr::select(target_death_rate)
+
+# LASSO Cross-validation
+lambda.range = 10^(seq(5, -3, length = 1000)) # set of lambdas to crossvalidate over
+lasso.CV =  cv.glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lambda.range)
+
+# LASSO Regressions comparing the lambda.min vs lambda.1se
+lasso.min = glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lasso.CV$lambda.min)
+lasso.1se = glmnet(as.matrix(train.data), as.matrix(train.outcome), lambda = lasso.CV$lambda.1se)</code></pre>
+<p>We have created two models based off of the LASSO cross-validation, one based off the minimum lambda and another based off a model comparable to the best model in the cross-validation. We’ll compare their coefficients and test MSE below to choose one.</p>
+<pre class="r"><code># List the coefficients for each model
+coef(lasso.min)</code></pre>
+<pre><code>## 8 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                                     s0
+## (Intercept)               26.120467298
+## incidence_rate             0.221693192
+## poverty_percent            0.967633615
+## pct_no_hs18_24             0.009942318
+## pct_hs18_24                0.529731387
+## pct_unemployed16_over      0.333988019
+## pct_public_coverage_alone  0.788385770
+## pct_black                  0.039939519</code></pre>
+<pre class="r"><code>coef(lasso.1se)</code></pre>
+<pre><code>## 8 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                                   s0
+## (Intercept)               50.6001697
+## incidence_rate             0.1908378
+## poverty_percent            0.8106481
+## pct_no_hs18_24             .        
+## pct_hs18_24                0.3526826
+## pct_unemployed16_over      0.1858600
+## pct_public_coverage_alone  0.7827868
+## pct_black                  .</code></pre>
+<pre class="r"><code># Calculate the test MSE for each model 
+lasso.min.test.preds = predict(lasso.min, s = lasso.CV$lambda.min, newx = as.matrix(test.data))
+lasso.min.test.MSE = mean((lasso.min.test.preds - test.outcome$target_death_rate)^2)
+lasso.1se.test.preds = predict(lasso.1se, s = lasso.CV$lambda.1se, newx = as.matrix(test.data))
+lasso.1se.test.MSE = mean((lasso.1se.test.preds - test.outcome$target_death_rate)^2)</code></pre>
+<p>The test MSE for the smallest lambda is 442.1, while the test MSE for the lambda comparable to the best model is 449.5. Given that the test MSEs are not significantly different, we will choose the more parsimonious model as the basis for our predictive model.</p>
+</div>
+<div id="create-the-model" class="section level1">
+<h1>Create the model</h1>
+<pre class="r"><code># Create a formula for the linear regression
+final.formula = as.formula(
+  paste(&quot;target_death_rate ~ &quot;,
+        &quot;incidence_rate + poverty_percent + pct_hs18_24 + pct_unemployed16_over + pct_public_coverage_alone&quot;
+        )
+)
+
+final.model = lm(final.formula, data = train.cancer)
+summary(final.model)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = final.formula, data = train.cancer)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -126.711  -12.447   -0.129   12.426  127.177 
+## 
+## Coefficients:
+##                            Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)               22.667017   4.012303   5.649 1.80e-08 ***
+## incidence_rate             0.226254   0.007947  28.472  &lt; 2e-16 ***
+## poverty_percent            1.045297   0.113594   9.202  &lt; 2e-16 ***
+## pct_hs18_24                0.547877   0.048532  11.289  &lt; 2e-16 ***
+## pct_unemployed16_over      0.401567   0.170504   2.355   0.0186 *  
+## pct_public_coverage_alone  0.761219   0.122077   6.236 5.29e-10 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 20.76 on 2430 degrees of freedom
+## Multiple R-squared:  0.4362, Adjusted R-squared:  0.435 
+## F-statistic:   376 on 5 and 2430 DF,  p-value: &lt; 2.2e-16</code></pre>
+<div id="check-for-model-assumptions" class="section level4">
+<h4>Check for model assumptions</h4>
+<pre class="r"><code>train.cancer %&gt;% 
+  add_residuals(final.model) %&gt;% 
+  add_predictions(final.model) %&gt;% 
+  ggplot(data = ., aes(x = pred, y = resid, color = ifelse(abs(resid) &lt; 75, &quot;red&quot;, &quot;blue&quot;))) +
+  geom_point() +
+  geom_hline(yintercept = 75, alpha = 0.3) +
+  geom_hline(yintercept = -75, alpha = 0.3) +
+  labs(
+    title = &quot;Fitted vs predicted values&quot;,
+    x = &quot;Predicted values&quot;,
+    y = &quot;Residuals&quot;
+  ) +
+  theme(
+    legend.position = &quot;none&quot;,
+    plot.title = element_text(hjust = 0.5)
+  )</code></pre>
+<p><img src="code_files/figure-html/fit-vs-pred-1.png" width="90%" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>train.cancer %&gt;% 
+  add_residuals(final.model) %&gt;% 
+  ggplot(data = ., aes(sample = resid)) +
+  stat_qq(color = &quot;blue&quot;, alpha = 0.5) +
+  stat_qq_line() +
+  labs(
+    title = &quot;QQ-plot for model residuals&quot;,
+    x = &quot;Theoretical quantiles&quot;,
+    y = &quot;Residuals&quot;
+  )</code></pre>
+<p><img src="code_files/figure-html/qqplot-1.png" width="90%" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="isolating-rows-that-are-outliers-in-the-dataset-and-influential-points" class="section level1">
+<h1>Isolating rows that are outliers in the dataset and influential points</h1>
+<pre class="r"><code>student.resids = studres(final.model)
+hats = hatvalues(final.model)
+cooks = cooks.distance(final.model)
+
+# Indexes of outliers and influential points
+y.outliers = unname(which(student.resids &gt; 2.5))
+x.outliers = unname(which(hats &gt; 2 * (length(final.model$coefficients) / nrow(train.data))))
+influentials = unname(which(cooks &gt; 1))
+
+outliers = intersect(y.outliers, x.outliers)
+outlier.ids = train.cancer[outliers, ]$id
+outlier.data = tidy.cancer %&gt;% filter(id %in% outlier.ids)</code></pre>
+</div>
+<div id="refitting-a-model-based-on-removing-outliers" class="section level1">
+<h1>Refitting a model based on removing outliers</h1>
+<pre class="r"><code>new.train.cancer = train.cancer %&gt;% filter(!(id %in% outliers))
+no.outliers.final.model = lm(final.formula, data = new.train.cancer)
+summary(no.outliers.final.model)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = final.formula, data = new.train.cancer)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -126.828  -12.394   -0.113   12.441  127.189 
+## 
+## Coefficients:
+##                            Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)               22.526319   4.012659   5.614 2.20e-08 ***
+## incidence_rate             0.226502   0.007947  28.502  &lt; 2e-16 ***
+## poverty_percent            1.045834   0.113593   9.207  &lt; 2e-16 ***
+## pct_hs18_24                0.545884   0.048536  11.247  &lt; 2e-16 ***
+## pct_unemployed16_over      0.397764   0.170513   2.333   0.0197 *  
+## pct_public_coverage_alone  0.766654   0.122092   6.279 4.02e-10 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 20.76 on 2427 degrees of freedom
+## Multiple R-squared:  0.4369, Adjusted R-squared:  0.4357 
+## F-statistic: 376.6 on 5 and 2427 DF,  p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>train.MSE = sum(final.model$residuals^2) / 2430</code></pre>
+<pre class="r"><code>cor(small.tidy.cancer)</code></pre>
+<pre><code>##                           target_death_rate incidence_rate poverty_percent
+## target_death_rate                1.00000000    0.449620013     0.429414906
+## incidence_rate                   0.44962001    1.000000000     0.009150766
+## poverty_percent                  0.42941491    0.009150766     1.000000000
+## pct_no_hs18_24                   0.08837688   -0.170388020     0.288058455
+## pct_hs18_24                      0.26187412    0.023118648     0.094117566
+## pct_unemployed16_over            0.37850349    0.100057294     0.655147910
+## pct_public_coverage_alone        0.44933531    0.040891516     0.798652736
+## pct_black                        0.25700621    0.113765086     0.511507096
+## id                               0.05180713    0.077800740     0.033184435
+##                           pct_no_hs18_24  pct_hs18_24
+## target_death_rate             0.08837688  0.261874121
+## incidence_rate               -0.17038802  0.023118648
+## poverty_percent               0.28805845  0.094117566
+## pct_no_hs18_24                1.00000000  0.084037672
+## pct_hs18_24                   0.08403767  1.000000000
+## pct_unemployed16_over         0.18117162  0.130726509
+## pct_public_coverage_alone     0.32728003  0.234077896
+## pct_black                     0.11650452 -0.025224960
+## id                            0.09187952 -0.003997913
+##                           pct_unemployed16_over pct_public_coverage_alone
+## target_death_rate                    0.37850349               0.449335309
+## incidence_rate                       0.10005729               0.040891516
+## poverty_percent                      0.65514791               0.798652736
+## pct_no_hs18_24                       0.18117162               0.327280029
+## pct_hs18_24                          0.13072651               0.234077896
+## pct_unemployed16_over                1.00000000               0.655409249
+## pct_public_coverage_alone            0.65540925               1.000000000
+## pct_black                            0.46928071               0.330094897
+## id                                  -0.01693555              -0.007866027
+##                             pct_black           id
+## target_death_rate          0.25700621  0.051807134
+## incidence_rate             0.11376509  0.077800740
+## poverty_percent            0.51150710  0.033184435
+## pct_no_hs18_24             0.11650452  0.091879519
+## pct_hs18_24               -0.02522496 -0.003997913
+## pct_unemployed16_over      0.46928071 -0.016935549
+## pct_public_coverage_alone  0.33009490 -0.007866027
+## pct_black                  1.00000000  0.017655152
+## id                         0.01765515  1.000000000</code></pre>
+</div>
+<div id="checking-vif" class="section level1">
+<h1>Checking VIF</h1>
+<pre class="r"><code>car::vif(final.model, data = train.cancer)</code></pre>
+<pre><code>##            incidence_rate           poverty_percent 
+##                  1.015156                  2.964005 
+##               pct_hs18_24     pct_unemployed16_over 
+##                  1.092296                  1.913923 
+## pct_public_coverage_alone 
+##                  3.119085</code></pre>
+</div>
+<div id="cross-validation-of-test-mse" class="section level1">
+<h1>Cross-validation of test MSE</h1>
+<pre class="r"><code># Use 10-fold cross-validation (10 repeats) and create the training sets
+train.settings = trainControl(method = &quot;repeatedcv&quot;, number = 10, repeats = 10)
+
+# Fit the final model that we discussed above
+cv.model = train(final.formula, 
+                 data = tidy.cancer,
+                 trControl = train.settings,
+                 method = &#39;lm&#39;,
+                 na.action = na.pass)
+
+cv.MSE = mean(cv.model$resample$RMSE^2)</code></pre>
+</div>
+<div id="log-transform-the-outcome" class="section level1">
+<h1>Log transform the outcome</h1>
+<pre class="r"><code># Create a formula for the linear regression
+log.formula = as.formula(
+  paste(&quot;log(target_death_rate) ~ &quot;,
+        &quot;incidence_rate + poverty_percent + pct_hs18_24 + pct_unemployed16_over + pct_public_coverage_alone&quot;
+        )
+)
+
+log.model = lm(log.formula, data = train.cancer)
+summary(log.model)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = log.formula, data = train.cancer)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -0.77005 -0.06450  0.00670  0.07274  0.57769 
+## 
+## Coefficients:
+##                            Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)               4.274e+00  2.331e-02 183.299  &lt; 2e-16 ***
+## incidence_rate            1.339e-03  4.618e-05  29.007  &lt; 2e-16 ***
+## poverty_percent           5.323e-03  6.601e-04   8.064 1.15e-15 ***
+## pct_hs18_24               3.011e-03  2.820e-04  10.678  &lt; 2e-16 ***
+## pct_unemployed16_over     2.554e-03  9.908e-04   2.578     0.01 ** 
+## pct_public_coverage_alone 4.375e-03  7.094e-04   6.168 8.08e-10 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.1206 on 2430 degrees of freedom
+## Multiple R-squared:  0.425,  Adjusted R-squared:  0.4238 
+## F-statistic: 359.2 on 5 and 2430 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
